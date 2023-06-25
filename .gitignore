@@ -1,6 +1,6 @@
-data/
-downloads/
-out/
+data
+downloads
+out
 /*.ipynb
 __pycache__
 src/test.py
