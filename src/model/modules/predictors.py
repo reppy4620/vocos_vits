@@ -41,6 +41,7 @@ class DurationPredictor(nn.Module):
         self.out_layer = nn.Conv1d(channels, 1, 1)
         
     def forward(self, x, mask):
+        x = x.detach()
         for layer in self.layers:
             x = layer(x, mask)
         x = self.out_layer(x) * mask
