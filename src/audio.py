@@ -14,7 +14,8 @@ class SpectrogramTransform(MelSpectrogram):
         return spec
     
     def to_mel(self, wav):
-        mel = self(wav)
+        spec = self.to_spec(wav)
+        mel = self.spec_to_mel(spec)
         return mel
 
     def spec_to_mel(self, spec):
@@ -23,6 +24,4 @@ class SpectrogramTransform(MelSpectrogram):
         return mel
     
     def forward(self, wav):
-        spec = self.to_spec(wav)
-        mel = self.spec_to_mel(spec)
-        return mel
+        raise NotImplementedError()

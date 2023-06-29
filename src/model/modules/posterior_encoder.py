@@ -9,12 +9,12 @@ class PosteriorEncoder(nn.Module):
         super().__init__()
         self.out_channels = out_channels
 
-        self.in_conv = nn.Conv1d(in_channels, hidden_channels, 1)
+        self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
         self.enc = WaveNetLayer(hidden_channels, kernel_size, dilation_rate, num_layers)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
         
     def forward(self, x, mask):
-        x = self.in_conv(x) * mask
+        x = self.pre(x) * mask
         x = self.enc(x, mask)
         x = self.proj(x) * mask
         m, logs = x.split([self.out_channels]*2, dim=1)

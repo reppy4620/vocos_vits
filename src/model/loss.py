@@ -41,7 +41,3 @@ def kl_loss(z_p, logs_q, m_p, logs_p, z_mask):
 
 def masked_mse_loss(pred, target, mask):
     return F.mse_loss(pred, target, reduction='sum') / mask.sum()
-
-
-def masked_bce_loss(pred, target, mask):
-    return F.binary_cross_entropy(pred, target, reduction='sum') / mask.sum()

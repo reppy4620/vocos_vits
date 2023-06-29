@@ -46,6 +46,9 @@ class VITSModule(LightningModule):
             x = torch.LongTensor(text_to_sequence(x)).unsqueeze(0).to(self.device)
         return self.net_g.infer(x, noise_scale=noise_scale).cpu().squeeze(1)
     
+    def infer_gt(self, x):
+        return self.net_g.infer_gt(x).cpu().squeeze(1)
+    
     def _handle_batch(self, batch, train=True):
         batch = Batch(*batch)
         optimizer_g, optimizer_d = self.optimizers()

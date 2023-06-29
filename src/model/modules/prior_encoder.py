@@ -88,7 +88,7 @@ class FFN(nn.Module):
 
     def forward(self, x, x_mask):
         x = self.conv_1(x * x_mask)
-        x = F.gelu(x)
+        x = F.relu(x)
         x = self.drop(x)
         x = self.conv_2(x * x_mask)
         return x * x_mask
