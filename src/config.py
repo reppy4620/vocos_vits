@@ -78,10 +78,10 @@ vits.posterior_encoder = DotDict(
     num_layers=16
 )
 vits.vocoder = DotDict(
-    in_channel2=channels, 
-    channel2=512,
-    h_channel2=1536,
-    out_channel2=n_fft + 2,
+    in_channels=channels, 
+    channels=512,
+    h_channels=1536,
+    out_channels=n_fft + 2,
     num_layers=8,
     istft_config=DotDict(
         n_fft=n_fft,

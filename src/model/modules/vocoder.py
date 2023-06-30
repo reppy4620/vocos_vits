@@ -4,7 +4,28 @@ import torch.nn.functional as F
 
 from torchaudio.transforms import InverseSpectrogram
 
-from .layers import LayerNorm, ConvNeXtLayer
+from .layers import LayerNorm
+
+
+class ConvNeXtLayer(nn.Module):
+    def __init__(self, channels, h_channels, scale):
+        super().__init__()
+        self.dw_conv = nn.Conv1d(channels, channels, kernel_size=7, padding=3, groups=channels)
+        self.norm = LayerNorm(channels)
+        self.pw_conv1 = nn.Conv1d(channels, h_channels, 1)
+        self.pw_conv2 = nn.Conv1d(h_channels, channels, 1)
+        self.scale = nn.Parameter(torch.full(size=(1, channels, 1), fill_value=scale), requires_grad=True)
+
+    def forward(self, x):
+        res = x
+        x = self.dw_conv(x)
+        x = self.norm(x)
+        x = self.pw_conv1(x)
+        x = F.gelu(x)
+        x = self.pw_conv2(x)
+        x = self.scale * x
+        x = res + x
+        return x
     
 
 class Vocoder(nn.Module):
