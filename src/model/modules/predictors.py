@@ -33,7 +33,7 @@ class DurationPredictor(nn.Module):
         super().__init__()
         scale = 1. / num_layers
         self.layers = nn.ModuleList([
-            Layer(channels, h_channels, scale)
+            Layer(channels, h_channels, scale, dropout)
             for _ in range(num_layers)
         ])
         self.out_layer = nn.Conv1d(channels, 1, 1)
