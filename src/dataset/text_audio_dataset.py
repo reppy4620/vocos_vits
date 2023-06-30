@@ -93,7 +93,7 @@ def collate_fn(batch):
     ) = tuple(zip(*batch))
 
     B = len(bnames)
-    x_lengths = [len(x) for x in phonemes]
+    x_lengths = [x.size(-1) for x in phonemes]
     frame_lengths = [x.size(-1) for x in specs]
     sample_lengths = [x.size(-1) for x in wavs]
 

@@ -21,29 +21,6 @@ class LayerNorm(nn.Module):
         return x
 
 
-class ConvNeXtLayer(nn.Module):
-    def __init__(self, channels, h_channels, scale, dropout=0.):
-        super().__init__()
-        self.dw_conv = nn.Conv1d(channels, channels, kernel_size=7, padding=3, groups=channels)
-        self.norm = LayerNorm(channels)
-        self.pw_conv1 = nn.Conv1d(channels, h_channels, 1)
-        self.pw_conv2 = nn.Conv1d(h_channels, channels, 1)
-        self.scale = nn.Parameter(torch.full(size=(1, channels, 1), fill_value=scale), requires_grad=True)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        res = x
-        x = self.dw_conv(x)
-        x = self.norm(x)
-        x = self.pw_conv1(x)
-        x = F.gelu(x)
-        x = self.dropout(x)
-        x = self.pw_conv2(x)
-        x = self.scale * x
-        x = res + x
-        return x
-
-
 class WaveNetLayer(nn.Module):
     def __init__(self, channels, kernel_size, dilation_rate, num_layers, dropout=0):
         super().__init__()
