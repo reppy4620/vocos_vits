@@ -6,7 +6,7 @@ from .layers import LayerNorm
 
 
 class Layer(nn.Module):
-    def __init__(self, channels, h_channels, scale, dropout=0.):
+    def __init__(self, channels, h_channels, scale, dropout):
         super().__init__()
         self.dw_conv = nn.Conv1d(channels, channels, kernel_size=7, padding=3, groups=channels)
         self.norm = LayerNorm(channels)

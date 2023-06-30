@@ -93,7 +93,7 @@ class VITS(nn.Module):
         log_duration = self.duration_predictor(x, x_mask)
         duration = torch.ceil(torch.exp(log_duration)).long()
 
-        frame_mask = torch.ones([1, 1, duration.sum()]).to(x.dtype)
+        frame_mask = torch.ones([1, 1, duration.sum()], dtype=x.dtype, device=x.device)
         path_mask = x_mask.unsqueeze(-1) * frame_mask.unsqueeze(2)
         attn_path = generate_path(duration.squeeze(1), path_mask.squeeze(1))
         m_p = m_p @ attn_path
