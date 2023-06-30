@@ -58,9 +58,9 @@ vits.phoneme_encoder = DotDict(
 )
 vits.duration_predictor = DotDict(
     channels=channels,
-    kernel_size=3,
+    h_channels=channels * 2,
     dropout=0.5,
-    num_layers=3
+    num_layers=2
 )
 vits.flow = DotDict(
     channels=channels, 
@@ -78,10 +78,10 @@ vits.posterior_encoder = DotDict(
     num_layers=16
 )
 vits.vocoder = DotDict(
-    in_channel=channels, 
-    channel=512,
-    h_channel=1536,
-    out_channel=n_fft + 2,
+    in_channel2=channels, 
+    channel2=512,
+    h_channel2=1536,
+    out_channel2=n_fft + 2,
     num_layers=8,
     istft_config=DotDict(
         n_fft=n_fft,
