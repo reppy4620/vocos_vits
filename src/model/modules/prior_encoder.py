@@ -88,7 +88,7 @@ class FFN(nn.Module):
 
     def forward(self, x, x_mask):
         x = self.conv_1(x * x_mask)
-        x = F.relu(x)
+        x = F.gelu(x)
         x = self.drop(x)
         x = self.conv_2(x * x_mask)
         return x * x_mask
@@ -120,7 +120,7 @@ class FFNLayer(nn.Module):
         y = self.ffn(x, mask)
         y = self.dropout(y)
         x = self.norm(x + y)
-        return x
+        return x * mask
 
 
 class EncoderLayer(nn.Module):
@@ -166,6 +166,7 @@ class PhonemeEncoder(nn.Module):
         x = self.emb(x) * self.scale
         x = torch.transpose(x, 1, -1)
         attn_mask = mask.unsqueeze(2) * mask.unsqueeze(-1)
+        x = x * mask
         for layer in self.layers:
             x = layer(x, mask, attn_mask)
         o = self.postnet(x) * mask
