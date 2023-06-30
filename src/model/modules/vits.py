@@ -88,13 +88,12 @@ class VITS(nn.Module):
         # x : [1, P]
         # P: Phoneme level length
 
-        x_mask = torch.ones_like(x.unsqueeze(1))
-
+        x_mask = torch.ones_like(x[:, None, :])
         x, m_p, logs_p = self.phoneme_encoder(x, x_mask)
         log_duration = self.duration_predictor(x, x_mask)
         duration = torch.ceil(torch.exp(log_duration)).long()
 
-        frame_mask = torch.ones([1, 1, duration.sum()], dtype=torch.float, device=x.device)
+        frame_mask = torch.ones([1, 1, duration.sum()]).to(x.dtype)
         path_mask = x_mask.unsqueeze(-1) * frame_mask.unsqueeze(2)
         attn_path = generate_path(duration.squeeze(1), path_mask.squeeze(1))
         m_p = m_p @ attn_path
@@ -106,8 +105,7 @@ class VITS(nn.Module):
         return o
 
     def infer_gt(self, spec):
-        B, _, T = spec.shape
-        frame_mask = torch.ones([B, 1, T], dtype=torch.float, device=spec.device)
+        frame_mask = torch.ones_like(spec[:, 0, :])
         z, _, _ = self.posterior_encoder(spec, frame_mask)
         o = self.vocoder(z)
         return o
