@@ -1,17 +1,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils import weight_norm, spectral_norm
+from torch.nn.utils import weight_norm
 
 
 LRELU_SLOPE = 0.1
 
 
 class DiscriminatorP(nn.Module):
-    def __init__(self, period, kernel_size=5, stride=3, use_spectral_norm=False):
+    def __init__(self, period, kernel_size=5, stride=3):
         super(DiscriminatorP, self).__init__()
         self.period = period
-        self.use_spectral_norm = use_spectral_norm
         self.convs = nn.ModuleList([
             weight_norm(nn.Conv2d(1, 32, (kernel_size, 1), (stride, 1), padding=(kernel_size//2, 0))),
             weight_norm(nn.Conv2d(32, 128, (kernel_size, 1), (stride, 1), padding=(kernel_size//2, 0))),
@@ -43,14 +42,11 @@ class DiscriminatorP(nn.Module):
 
 
 class MultiPeriodDiscriminator(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, periods=[2, 3, 5, 7, 11]):
         super(MultiPeriodDiscriminator, self).__init__()
         self.discriminators = nn.ModuleList([
-            DiscriminatorP(2),
-            DiscriminatorP(3),
-            DiscriminatorP(5),
-            DiscriminatorP(7),
-            DiscriminatorP(11),
+            DiscriminatorP(p)
+            for p in periods
         ])
 
     def forward(self, y, y_hat):
@@ -75,13 +71,11 @@ class DiscriminatorR(nn.Module):
         self,
         resolution,
         channels=64,
-        in_channels=1,
-        lrelu_slope=0.1,
+        in_channels=1
     ):
         super().__init__()
         self.resolution = resolution
         self.in_channels = in_channels
-        self.lrelu_slope = lrelu_slope
         self.convs = nn.ModuleList(
             [
                 weight_norm(nn.Conv2d(in_channels, channels, kernel_size=(7, 5), stride=(2, 2), padding=(3, 2))),
@@ -99,7 +93,7 @@ class DiscriminatorR(nn.Module):
         x = x.unsqueeze(1)
         for l in self.convs:
             x = l(x)
-            x = torch.nn.functional.leaky_relu(x, self.lrelu_slope)
+            x = F.leaky_relu(x, LRELU_SLOPE)
             fmap.append(x)
         x = self.conv_post(x)
         fmap.append(x)
@@ -113,20 +107,20 @@ class DiscriminatorR(nn.Module):
             n_fft=n_fft,
             hop_length=hop_length,
             win_length=win_length,
-            window=None,  # interestingly rectangular window kind of works here
+            window=None,
             center=True,
             return_complex=True,
         ).abs()
-
         return magnitude_spectrogram
 
 
 class MultiResolutionDiscriminator(nn.Module):
     def __init__(self, resolutions=((1024, 256, 1024), (2048, 512, 2048), (512, 128, 512))):
         super().__init__()
-        self.discriminators = nn.ModuleList(
-            [DiscriminatorR(resolution=r) for r in resolutions]
-        )
+        self.discriminators = nn.ModuleList([
+            DiscriminatorR(resolution=r) 
+            for r in resolutions
+        ])
 
     def forward(self, y, y_hat):
         y_d_rs = []
