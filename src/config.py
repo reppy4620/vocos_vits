@@ -58,9 +58,9 @@ vits.phoneme_encoder = DotDict(
 )
 vits.duration_predictor = DotDict(
     channels=channels,
-    kernel_size=3,
+    h_channels=channels * 2,
     dropout=0.5,
-    num_layers=3
+    num_layers=2
 )
 vits.flow = DotDict(
     channels=channels, 
