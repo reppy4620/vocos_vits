@@ -27,20 +27,18 @@ class TextAudioDataset(torch.utils.data.Dataset):
         self.spec_tfm = SpectrogramTransform(**audio_config)
 
     def preprocess(self, bname, label):
-        wav, _ = torchaudio.load(self.wav_dir / f'{bname}.wav')
         with open(self.lab_dir / f'{bname}.lab', 'r') as f:
             fullcontext = f.readlines()
         durations = []
         cnt = 0
         wav_s = wav_e = 0
-        label = label.split()
-        for i, s in enumerate(label):
+        for s in label.split():
             if s in phonemes or s in ['^', '$', '?', '_']:
                 s, e, _ = fullcontext[cnt].split()
                 s, e = int(s), int(e)
-                if i == 0:
+                if cnt == 0:
                     wav_s = int(e * 1e-7 * self.sample_rate)
-                elif i == len(label) - 1:
+                elif cnt == len(fullcontext) - 1:
                     wav_e = int(s * 1e-7 * self.sample_rate)
                 else:
                     dur = (e - s) * 1e-7 / (self.hop_length / self.sample_rate)
@@ -48,15 +46,16 @@ class TextAudioDataset(torch.utils.data.Dataset):
                 cnt += 1
             else:
                 durations.append(1)
+        wav, _ = torchaudio.load(self.wav_dir / f'{bname}.wav')
         wav = wav[:, wav_s:wav_e]
-        spec = self.spec_tfm.to_spec(wav).squeeze()
-        frame_length = spec.shape[-1]
-
+        spec = self.spec_tfm.to_spec(wav).squeeze(0)
+        spec_length = spec.shape[-1]
         # adjust length, differences are caused by round op.
         round_durations = np.round(durations)
-        diff_length = np.sum(round_durations) - frame_length
+        diff_length = np.sum(round_durations) - spec_length
         if diff_length == 0:
-            return torch.FloatTensor(round_durations)
+            duration = torch.FloatTensor(round_durations)
+            return wav, spec, duration
         elif diff_length > 0:
             durations_diff = round_durations - durations
             d = -1
@@ -68,16 +67,19 @@ class TextAudioDataset(torch.utils.data.Dataset):
             round_durations[idx] += d
             if i == abs(diff_length):
                 break
-        assert np.sum(round_durations) == frame_length
+        assert np.sum(round_durations) == spec_length
         duration = torch.FloatTensor(round_durations)
         return wav, spec, duration
+
 
     def __getitem__(self, idx):
         bname, label = self.data[idx]
 
         phonemes = torch.LongTensor(text_to_sequence(label.split()))
         phonemes = phonemes[1:-1]
+        
         wav, spec, duration = self.preprocess(bname, label)
+        assert phonemes.shape[-1] == duration.shape[-1]
 
         return (
             bname,
@@ -101,7 +103,7 @@ def collate_fn(batch):
     ) = tuple(zip(*batch))
 
     B = len(bnames)
-    x_lengths = [len(x) for x in phonemes]
+    x_lengths = [x.size(-1) for x in phonemes]
     frame_lengths = [x.size(-1) for x in specs]
     sample_lengths = [x.size(-1) for x in wavs]
 
