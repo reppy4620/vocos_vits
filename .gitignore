@@ -1,6 +1,7 @@
 data
 downloads
 out
+out*
 /*.ipynb
 __pycache__
 src/test.py
