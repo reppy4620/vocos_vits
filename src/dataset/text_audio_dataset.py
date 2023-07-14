@@ -9,7 +9,7 @@ from text import text_to_sequence, phonemes
 
 
 class TextAudioDataset(torch.utils.data.Dataset):
-    def __init__(self, file_path, wav_dir, lab_dir, audio_config, split='|'):
+    def __init__(self, file_path, wav_dir, lab_dir, audio_config, split="|"):
         with open(file_path) as f:
             lines = f.readlines()
             data = list()
@@ -19,7 +19,7 @@ class TextAudioDataset(torch.utils.data.Dataset):
         self.data = data
         self.wav_dir = Path(wav_dir)
         self.lab_dir = Path(lab_dir)
-        
+
         self.audio_config = audio_config
         self.hop_length = audio_config.hop_length
         self.sample_rate = audio_config.sample_rate
@@ -27,13 +27,13 @@ class TextAudioDataset(torch.utils.data.Dataset):
         self.spec_tfm = SpectrogramTransform(**audio_config)
 
     def preprocess(self, bname, label):
-        with open(self.lab_dir / f'{bname}.lab', 'r') as f:
+        with open(self.lab_dir / f"{bname}.lab", "r") as f:
             fullcontext = f.readlines()
         durations = []
         cnt = 0
         wav_s = wav_e = 0
         for s in label.split():
-            if s in phonemes or s in ['^', '$', '?', '_']:
+            if s in phonemes or s in ["^", "$", "?", "_"]:
                 s, e, _ = fullcontext[cnt].split()
                 s, e = int(s), int(e)
                 if cnt == 0:
@@ -46,7 +46,7 @@ class TextAudioDataset(torch.utils.data.Dataset):
                 cnt += 1
             else:
                 durations.append(1)
-        wav, _ = torchaudio.load(self.wav_dir / f'{bname}.wav')
+        wav, _ = torchaudio.load(self.wav_dir / f"{bname}.wav")
         wav = wav[:, wav_s:wav_e]
         spec = self.spec_tfm.to_spec(wav).squeeze(0)
         spec_length = spec.shape[-1]
@@ -59,7 +59,7 @@ class TextAudioDataset(torch.utils.data.Dataset):
         elif diff_length > 0:
             durations_diff = round_durations - durations
             d = -1
-        else: # diff_length < 0
+        else:  # diff_length < 0
             durations_diff = durations - round_durations
             d = 1
         sort_dur_idx = np.argsort(durations_diff)[::-1]
@@ -71,36 +71,23 @@ class TextAudioDataset(torch.utils.data.Dataset):
         duration = torch.FloatTensor(round_durations)
         return wav, spec, duration
 
-
     def __getitem__(self, idx):
         bname, label = self.data[idx]
 
         phonemes = torch.LongTensor(text_to_sequence(label.split()))
         phonemes = phonemes[1:-1]
-        
+
         wav, spec, duration = self.preprocess(bname, label)
         assert phonemes.shape[-1] == duration.shape[-1]
 
-        return (
-            bname,
-            phonemes,
-            duration,
-            wav,
-            spec
-        )
+        return (bname, phonemes, duration, wav, spec)
 
     def __len__(self):
         return len(self.data)
 
 
 def collate_fn(batch):
-    (
-        bnames,
-        phonemes,
-        durations,
-        wavs,
-        specs
-    ) = tuple(zip(*batch))
+    (bnames, phonemes, durations, wavs, specs) = tuple(zip(*batch))
 
     B = len(bnames)
     x_lengths = [x.size(-1) for x in phonemes]
