@@ -1,43 +1,41 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .layers import LayerNorm
 
 
 class Layer(nn.Module):
-    def __init__(self, channels, h_channels, scale, dropout):
+    def __init__(self, channels, kernel_size):
         super().__init__()
-        self.dw_conv = nn.Conv1d(
-            channels, channels, kernel_size=7, padding=3, groups=channels
-        )
+        self.conv = nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2)
         self.norm = LayerNorm(channels)
-        self.pw_conv1 = nn.Conv1d(channels, h_channels, 1)
-        self.pw_conv2 = nn.Conv1d(h_channels, channels, 1)
-        self.scale = nn.Parameter(
-            torch.full(size=(1, channels, 1), fill_value=scale), requires_grad=True
-        )
-        self.dropout = nn.Dropout(dropout)
+        self.act = nn.GELU()
 
     def forward(self, x, mask):
-        res = x
-        x = self.dw_conv(x)
+        x = self.conv(x)
         x = self.norm(x)
-        x = self.pw_conv1(x * mask)
-        x = F.gelu(x)
-        x = self.dropout(x)
-        x = self.pw_conv2(x * mask)
-        x = self.scale * x
-        x = res + x
+        x = self.act(x)
         return x * mask
 
 
-class DurationPredictor(nn.Module):
-    def __init__(self, channels, h_channels, dropout, num_layers):
+class Block(nn.Module):
+    def __init__(self, channels, kernel_size, dropout):
         super().__init__()
-        scale = 1.0 / num_layers
+        self.layer1 = Layer(channels, kernel_size)
+        self.layer2 = Layer(channels, kernel_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask):
+        y = self.layer1(x, mask)
+        y = self.dropout(y)
+        y = self.layer2(y, mask)
+        return x + y
+
+
+class DurationPredictor(nn.Module):
+    def __init__(self, channels, kernel_size, dropout, num_layers):
+        super().__init__()
         self.layers = nn.ModuleList(
-            [Layer(channels, h_channels, scale, dropout) for _ in range(num_layers)]
+            [Block(channels, kernel_size, dropout) for _ in range(num_layers)]
         )
         self.out_layer = nn.Conv1d(channels, 1, 1)
 
