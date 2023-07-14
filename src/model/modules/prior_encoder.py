@@ -24,9 +24,13 @@ class MultiHeadAttention(nn.Module):
         self.conv_o = nn.Conv1d(channels, channels, 1)
         self.drop = nn.Dropout(dropout)
 
-        rel_stddev = self.inter_channels ** -0.5
-        self.emb_rel_k = nn.Parameter(torch.randn(1, window_size * 2 + 1, self.inter_channels) * rel_stddev)
-        self.emb_rel_v = nn.Parameter(torch.randn(1, window_size * 2 + 1, self.inter_channels) * rel_stddev)
+        rel_stddev = self.inter_channels**-0.5
+        self.emb_rel_k = nn.Parameter(
+            torch.randn(1, window_size * 2 + 1, self.inter_channels) * rel_stddev
+        )
+        self.emb_rel_v = nn.Parameter(
+            torch.randn(1, window_size * 2 + 1, self.inter_channels) * rel_stddev
+        )
 
         nn.init.xavier_uniform_(self.conv_q.weight)
         nn.init.xavier_uniform_(self.conv_k.weight)
@@ -38,11 +42,12 @@ class MultiHeadAttention(nn.Module):
         v = self.conv_v(x)
 
         B, C, T = q.size()
-        query = q.view(B, self.n_heads, self.inter_channels, T).transpose(2, 3)
-        key   = k.view(B, self.n_heads, self.inter_channels, T).transpose(2, 3)
-        value = v.view(B, self.n_heads, self.inter_channels, T).transpose(2, 3)
+        H = self.n_heads
+        query = q.view(B, H, self.inter_channels, T).transpose(2, 3)
+        key = k.view(B, H, self.inter_channels, T).transpose(2, 3)
+        value = v.view(B, H, self.inter_channels, T).transpose(2, 3)
 
-        scores = torch.matmul(query / self.scale, key.transpose(-2, -1))
+        score = torch.matmul(query, key.transpose(-2, -1)) / self.scale
 
         pad_length = max(0, T - (self.window_size + 1))
         start = max(0, (self.window_size + 1) - T)
@@ -51,23 +56,24 @@ class MultiHeadAttention(nn.Module):
         pad_rel_emb = F.pad(self.emb_rel_k, [0, 0, pad_length, pad_length, 0, 0])
         k_emb = pad_rel_emb[:, start:end]
 
-        rel_logits = torch.matmul(query / self.scale, k_emb.unsqueeze(0).transpose(-2, -1))
+        rel_logits = torch.matmul(query, k_emb.unsqueeze(0).transpose(-2, -1))
         rel_logits = F.pad(rel_logits, [0, 1])
-        rel_logits = rel_logits.view([B, self.n_heads, 2 * T * T])
+        rel_logits = rel_logits.view([B, H, 2 * T * T])
         rel_logits = F.pad(rel_logits, [0, T - 1])
-        scores_local = rel_logits.view([B, self.n_heads, T + 1, 2 * T - 1])[:, :, :T, T - 1:]
+        score_loc = rel_logits.view([B, H, T + 1, 2 * T - 1])[:, :, :T, T - 1 :]  # noqa
+        score_loc = score_loc / self.scale
 
-        scores = scores + scores_local
+        score = score + score_loc
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e4)
-        p_attn = F.softmax(scores, dim=-1)
+            score = score.masked_fill(mask == 0, -1e4)
+        p_attn = F.softmax(score, dim=-1)
         p_attn = self.drop(p_attn)
         output = torch.matmul(p_attn, value)
 
         p_attn = F.pad(p_attn, [0, T - 1])
-        p_attn = p_attn.view([B, self.n_heads, T * (2 * T - 1)])
+        p_attn = p_attn.view([B, H, T * (2 * T - 1)])
         p_attn = F.pad(p_attn, [T, 0])
-        relative_weights = p_attn.view([B, self.n_heads, T, 2 * T])[:, :, :, 1:]
+        relative_weights = p_attn.view([B, H, T, 2 * T])[:, :, :, 1:]
 
         pad_rel_emb = F.pad(self.emb_rel_v, [0, 0, pad_length, pad_length, 0, 0])
         v_emb = pad_rel_emb[:, start:end]
@@ -83,26 +89,31 @@ class MultiHeadAttention(nn.Module):
 class FFN(nn.Module):
     def __init__(self, channels, kernel_size, dropout, scale=4):
         super(FFN, self).__init__()
-        self.conv_1 = torch.nn.Conv1d(channels, channels*scale, kernel_size, padding=kernel_size//2)
-        self.conv_2 = torch.nn.Conv1d(channels*scale, channels, kernel_size, padding=kernel_size//2)
+        self.conv_1 = torch.nn.Conv1d(
+            channels, channels * scale, kernel_size, padding=kernel_size // 2
+        )
+        self.conv_2 = torch.nn.Conv1d(
+            channels * scale, channels, kernel_size, padding=kernel_size // 2
+        )
         self.drop = torch.nn.Dropout(dropout)
-
 
     def forward(self, x, x_mask):
         x = self.conv_1(x * x_mask)
-        x = F.gelu(x)
+        x = F.relu(x)
         x = self.drop(x)
         x = self.conv_2(x * x_mask)
         return x * x_mask
-    
+
 
 class AttentionLayer(nn.Module):
     def __init__(self, channels, num_head, dropout, window_size):
         super().__init__()
-        self.attention_layer = MultiHeadAttention(channels, num_head, dropout, window_size)
+        self.attention_layer = MultiHeadAttention(
+            channels, num_head, dropout, window_size
+        )
         self.norm = LayerNorm(channels)
         self.dropout = nn.Dropout(dropout)
-    
+
     def forward(self, x, attn_mask):
         y = self.attention_layer(x, attn_mask)
         y = self.dropout(y)
@@ -116,7 +127,7 @@ class FFNLayer(nn.Module):
         self.ffn = FFN(channels, kernel_size, dropout, scale)
         self.norm = LayerNorm(channels)
         self.dropout = nn.Dropout(dropout)
-    
+
     def forward(self, x, mask):
         y = self.ffn(x, mask)
         y = self.dropout(y)
@@ -127,17 +138,8 @@ class FFNLayer(nn.Module):
 class EncoderLayer(nn.Module):
     def __init__(self, channels, num_head, kernel_size, dropout, window_size):
         super().__init__()
-        self.attention = AttentionLayer(
-            channels,
-            num_head,
-            dropout,
-            window_size
-        )
-        self.ffn = FFNLayer(
-            channels,
-            kernel_size=kernel_size,
-            dropout=dropout
-        )
+        self.attention = AttentionLayer(channels, num_head, dropout, window_size)
+        self.ffn = FFNLayer(channels, kernel_size=kernel_size, dropout=dropout)
 
     def forward(self, x, mask, attn_mask):
         x = self.attention(x, attn_mask)
@@ -146,22 +148,28 @@ class EncoderLayer(nn.Module):
 
 
 class PhonemeEncoder(nn.Module):
-    def __init__(self, num_vocab, channels, num_head, num_layers, kernel_size, dropout, window_size):
+    def __init__(
+        self,
+        num_vocab,
+        channels,
+        num_head,
+        num_layers,
+        kernel_size,
+        dropout,
+        window_size,
+    ):
         super().__init__()
         self.channels = channels
         self.emb = nn.Embedding(num_vocab, channels)
         torch.nn.init.normal_(self.emb.weight, 0.0, channels**-0.5)
         self.scale = math.sqrt(channels)
 
-        self.layers = nn.ModuleList([
-            EncoderLayer(
-                channels,
-                num_head,
-                kernel_size,
-                dropout,
-                window_size
-            ) for _ in range(num_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                EncoderLayer(channels, num_head, kernel_size, dropout, window_size)
+                for _ in range(num_layers)
+            ]
+        )
         self.postnet = nn.Conv1d(channels, channels * 2, 1)
 
     def forward(self, x, mask):

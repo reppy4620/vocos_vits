@@ -11,14 +11,54 @@ class DiscriminatorP(nn.Module):
     def __init__(self, period, kernel_size=5, stride=3):
         super(DiscriminatorP, self).__init__()
         self.period = period
-        self.convs = nn.ModuleList([
-            weight_norm(nn.Conv2d(1, 32, (kernel_size, 1), (stride, 1), padding=(kernel_size//2, 0))),
-            weight_norm(nn.Conv2d(32, 128, (kernel_size, 1), (stride, 1), padding=(kernel_size//2, 0))),
-            weight_norm(nn.Conv2d(128, 512, (kernel_size, 1), (stride, 1), padding=(kernel_size//2, 0))),
-            weight_norm(nn.Conv2d(512, 1024, (kernel_size, 1), (stride, 1), padding=(kernel_size//2, 0))),
-            weight_norm(nn.Conv2d(1024, 1024, (kernel_size, 1), 1, padding=(kernel_size//2, 0))),
-        ])
-        self.conv_post = weight_norm(nn.Conv2d(1024, 1, kernel_size=(3, 1), stride=1, padding=(1, 0)))
+        self.convs = nn.ModuleList(
+            [
+                weight_norm(
+                    nn.Conv2d(
+                        1,
+                        32,
+                        (kernel_size, 1),
+                        (stride, 1),
+                        padding=(kernel_size // 2, 0),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        32,
+                        128,
+                        (kernel_size, 1),
+                        (stride, 1),
+                        padding=(kernel_size // 2, 0),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        128,
+                        512,
+                        (kernel_size, 1),
+                        (stride, 1),
+                        padding=(kernel_size // 2, 0),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        512,
+                        1024,
+                        (kernel_size, 1),
+                        (stride, 1),
+                        padding=(kernel_size // 2, 0),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        1024, 1024, (kernel_size, 1), 1, padding=(kernel_size // 2, 0)
+                    )
+                ),
+            ]
+        )
+        self.conv_post = weight_norm(
+            nn.Conv2d(1024, 1, kernel_size=(3, 1), stride=1, padding=(1, 0))
+        )
 
     def forward(self, x):
         fmap = []
@@ -28,8 +68,8 @@ class DiscriminatorP(nn.Module):
             x = F.pad(x, (0, n_pad), "reflect")
             t = t + n_pad
         x = x.view(b, c, t // self.period, self.period)
-        for l in self.convs:
-            x = l(x)
+        for layer in self.convs:
+            x = layer(x)
             x = F.leaky_relu(x, LRELU_SLOPE)
             fmap.append(x)
         x = self.conv_post(x)
@@ -42,10 +82,7 @@ class DiscriminatorP(nn.Module):
 class MultiPeriodDiscriminator(torch.nn.Module):
     def __init__(self, periods=[2, 3, 5, 7, 11]):
         super(MultiPeriodDiscriminator, self).__init__()
-        self.discriminators = nn.ModuleList([
-            DiscriminatorP(p)
-            for p in periods
-        ])
+        self.discriminators = nn.ModuleList([DiscriminatorP(p) for p in periods])
 
     def forward(self, y, y_hat):
         y_d_rs = []
@@ -63,24 +100,50 @@ class MultiPeriodDiscriminator(torch.nn.Module):
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
 
-
 class DiscriminatorR(nn.Module):
-    def __init__(
-        self,
-        resolution,
-        channels=64,
-        in_channels=1
-    ):
+    def __init__(self, resolution, channels=64, in_channels=1):
         super().__init__()
         self.resolution = resolution
         self.in_channels = in_channels
         self.convs = nn.ModuleList(
             [
-                weight_norm(nn.Conv2d(in_channels, channels, kernel_size=(7, 5), stride=(2, 2), padding=(3, 2))),
-                weight_norm(nn.Conv2d(channels, channels, kernel_size=(5, 3), stride=(2, 1), padding=(2, 1))),
-                weight_norm(nn.Conv2d(channels, channels, kernel_size=(5, 3), stride=(2, 2), padding=(2, 1))),
-                weight_norm(nn.Conv2d(channels, channels, kernel_size=3, stride=(2, 1), padding=1)),
-                weight_norm(nn.Conv2d(channels, channels, kernel_size=3, stride=(2, 2), padding=1)),
+                weight_norm(
+                    nn.Conv2d(
+                        in_channels,
+                        channels,
+                        kernel_size=(7, 5),
+                        stride=(2, 2),
+                        padding=(3, 2),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        channels,
+                        channels,
+                        kernel_size=(5, 3),
+                        stride=(2, 1),
+                        padding=(2, 1),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        channels,
+                        channels,
+                        kernel_size=(5, 3),
+                        stride=(2, 2),
+                        padding=(2, 1),
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        channels, channels, kernel_size=3, stride=(2, 1), padding=1
+                    )
+                ),
+                weight_norm(
+                    nn.Conv2d(
+                        channels, channels, kernel_size=3, stride=(2, 2), padding=1
+                    )
+                ),
             ]
         )
         self.conv_post = weight_norm(nn.Conv2d(channels, 1, (3, 3), padding=(1, 1)))
@@ -89,8 +152,8 @@ class DiscriminatorR(nn.Module):
         fmap = []
         x = self.spectrogram(x.squeeze(1))
         x = x.unsqueeze(1)
-        for l in self.convs:
-            x = l(x)
+        for layer in self.convs:
+            x = layer(x)
             x = F.leaky_relu(x, LRELU_SLOPE)
             fmap.append(x)
         x = self.conv_post(x)
@@ -113,12 +176,13 @@ class DiscriminatorR(nn.Module):
 
 
 class MultiResolutionDiscriminator(nn.Module):
-    def __init__(self, resolutions=((1024, 256, 1024), (2048, 512, 2048), (512, 128, 512))):
+    def __init__(
+        self, resolutions=((1024, 256, 1024), (2048, 512, 2048), (512, 128, 512))
+    ):
         super().__init__()
-        self.discriminators = nn.ModuleList([
-            DiscriminatorR(resolution=r) 
-            for r in resolutions
-        ])
+        self.discriminators = nn.ModuleList(
+            [DiscriminatorR(resolution=r) for r in resolutions]
+        )
 
     def forward(self, y, y_hat):
         y_d_rs = []
@@ -136,7 +200,6 @@ class MultiResolutionDiscriminator(nn.Module):
 
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
-    
 
 class Discriminator(nn.Module):
     def __init__(self):
@@ -147,7 +210,4 @@ class Discriminator(nn.Module):
     def forward(self, y, y_hat):
         o1 = self.mpd(y, y_hat)
         o2 = self.mrd(y, y_hat)
-        return [
-            l1 + l2
-            for l1, l2 in zip(o1, o2)
-        ]
+        return [l1 + l2 for l1, l2 in zip(o1, o2)]

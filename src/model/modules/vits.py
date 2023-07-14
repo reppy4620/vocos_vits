@@ -36,29 +36,22 @@ class VITS(nn.Module):
         self.hop_length = params.hop_length
         self.sample_segment_size = self.segment_size * self.hop_length
 
-        self.phoneme_encoder    = PhonemeEncoder(**params.phoneme_encoder)
+        self.phoneme_encoder = PhonemeEncoder(**params.phoneme_encoder)
         self.duration_predictor = DurationPredictor(**params.duration_predictor)
-        self.flow               = Flow(**params.flow)
-        self.posterior_encoder  = PosteriorEncoder(**params.posterior_encoder)
-        self.vocoder            = Vocoder(**params.vocoder)
+        self.flow = Flow(**params.flow)
+        self.posterior_encoder = PosteriorEncoder(**params.posterior_encoder)
+        self.vocoder = Vocoder(**params.vocoder)
 
     def forward(self, batch: Batch) -> VITSOutput:
-        (
-            _,
-            x,
-            duration,
-            x_lengths,
-            _,
-            _,
-            spec,
-            frame_lengths
-        ) = batch
+        (_, x, duration, x_lengths, _, _, spec, frame_lengths) = batch
 
         x_mask = sequence_mask(x_lengths, x.shape[-1]).unsqueeze(1).to(x.dtype)
         x, m_p, logs_p = self.phoneme_encoder(x, x_mask)
         duratino_pred = self.duration_predictor(x, x_mask)
 
-        frame_mask = sequence_mask(frame_lengths, spec.shape[-1]).unsqueeze(1).to(spec.dtype)
+        frame_mask = (
+            sequence_mask(frame_lengths, spec.shape[-1]).unsqueeze(1).to(spec.dtype)
+        )
         path_mask = x_mask.unsqueeze(-1) * frame_mask.unsqueeze(2)
         attn_path = generate_path(duration.squeeze(1), path_mask.squeeze(1))
         m_p = m_p @ attn_path
@@ -67,7 +60,9 @@ class VITS(nn.Module):
         z, m_q, logs_q = self.posterior_encoder(spec, frame_mask)
         z_p = self.flow(z, frame_mask)
 
-        z_slice, idx_slice = rand_slice_segments(z, frame_lengths, segment_size=self.segment_size)
+        z_slice, idx_slice = rand_slice_segments(
+            z, frame_lengths, segment_size=self.segment_size
+        )
         o = self.vocoder(z_slice)
 
         return VITSOutput(
@@ -81,9 +76,9 @@ class VITS(nn.Module):
             logs_q=logs_q,
             x_mask=x_mask,
             frame_mask=frame_mask,
-            idx_slice=idx_slice
+            idx_slice=idx_slice,
         )
-    
+
     def infer(self, x: torch.Tensor, noise_scale: float = 0.667) -> torch.Tensor:
         # x : [1, P]
         # P: Phoneme level length

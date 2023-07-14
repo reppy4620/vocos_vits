@@ -8,11 +8,15 @@ from .layers import LayerNorm
 class Layer(nn.Module):
     def __init__(self, channels, h_channels, scale, dropout):
         super().__init__()
-        self.dw_conv = nn.Conv1d(channels, channels, kernel_size=7, padding=3, groups=channels)
+        self.dw_conv = nn.Conv1d(
+            channels, channels, kernel_size=7, padding=3, groups=channels
+        )
         self.norm = LayerNorm(channels)
         self.pw_conv1 = nn.Conv1d(channels, h_channels, 1)
         self.pw_conv2 = nn.Conv1d(h_channels, channels, 1)
-        self.scale = nn.Parameter(torch.full(size=(1, channels, 1), fill_value=scale), requires_grad=True)
+        self.scale = nn.Parameter(
+            torch.full(size=(1, channels, 1), fill_value=scale), requires_grad=True
+        )
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, mask):
@@ -31,13 +35,12 @@ class Layer(nn.Module):
 class DurationPredictor(nn.Module):
     def __init__(self, channels, h_channels, dropout, num_layers):
         super().__init__()
-        scale = 1. / num_layers
-        self.layers = nn.ModuleList([
-            Layer(channels, h_channels, scale, dropout)
-            for _ in range(num_layers)
-        ])
+        scale = 1.0 / num_layers
+        self.layers = nn.ModuleList(
+            [Layer(channels, h_channels, scale, dropout) for _ in range(num_layers)]
+        )
         self.out_layer = nn.Conv1d(channels, 1, 1)
-        
+
     def forward(self, x, mask):
         x = x.detach()
         for layer in self.layers:
